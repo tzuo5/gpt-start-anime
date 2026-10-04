@@ -6,7 +6,7 @@
 
 **平台：Linux 的 Ubuntu / Debian 系桌面。已在 Ubuntu 26.04 + GNOME Wayland 上验证。当前不支持 Windows、macOS，也不用于 Codex CLI 的终端启动。** 默认适配提供 `chatgpt.desktop` 的桌面应用，其他 Linux 安装可指定自己的 `.desktop` 文件。
 
-这是通过用户桌面启动器实现的第三方开屏动画扩展；原生 Appearance 的集成限制见[外观设置说明](docs/appearance.md)。
+这是通过用户桌面启动器实现的第三方开屏动画扩展。v1.1 提供可选的原生 Appearance 按钮：构建指定版本的用户目录应用副本，点击按钮打开动画设置。[原生集成安装教程](docs/appearance.md)包含支持范围、AppArmor 配置、升级与恢复步骤。
 
 ## 功能
 
@@ -17,6 +17,8 @@
 - 可配置开关、文件夹、全屏 / 窗口、静音、异常超时。
 - Esc、空格或“跳过”可以提前进入应用。
 - 独立外观设置窗口、应用图标右键菜单入口。
+- 可选的原生 `Settings → Appearance` 设置按钮，首次适配 Linux x86_64 的 `26.930.31730` 已核对应用包。
+- 原应用更新时，原生集成自动回退系统原版，保留动画功能。
 - 失败或超时后继续打开应用；可恢复原启动入口。
 
 ## 1. 下载
@@ -99,7 +101,14 @@ animations/
 /usr/bin/python3 ~/.local/share/codex-startup-animation/manage.py gui
 ```
 
-设置页提供开关、文件夹、全屏、静音、超时、预览与恢复原入口。**当前未嵌入原生 `Settings → Appearance`**，原因见[外观设置说明](docs/appearance.md)。
+设置页提供开关、文件夹、全屏、静音、超时、预览与恢复原入口。要从原生 `Settings → Appearance` 打开它，按[原生集成教程](docs/appearance.md)先配置副本的 AppArmor 规则，再运行：
+
+```sh
+/usr/bin/python3 manage.py native install
+/usr/bin/python3 manage.py native status
+```
+
+正常退出当前应用，再从原图标打开即可看到按钮。这是第三方应用副本补丁，按版本与 SHA-256 校验；不是官方插件设置扩展接口。
 
 ## 更新、卸载与排错
 
@@ -118,7 +127,7 @@ ZIP 下载者下载新版本，解压后执行同样的安装命令。更新保�
 /usr/bin/python3 ~/.local/share/codex-startup-animation/manage.py uninstall
 ```
 
-恢复后移除设置快捷方式，保留视频、配置和工具供重新启用。完整清理见[安装与卸载教程](docs/installation.md)。
+恢复后移除设置快捷方式和未运行的应用副本，保留视频、配置和工具供重新启用。正在运行的副本需正常退出后再次移除，专用 AppArmor 规则需单独卸载。完整清理见[安装与卸载教程](docs/installation.md)和[原生集成教程](docs/appearance.md)。
 
 检查状态和依赖：
 
@@ -148,6 +157,14 @@ ZIP 下载者下载新版本，解压后执行同样的安装命令。更新保�
 
 测试使用临时目录与模拟应用，不修改真实桌面入口。GitHub Actions 另外在虚拟显示器上播放默认视频，检查渲染和自然结束。
 
+IPC 桥接测试使用 Node.js（仅开发测试需要）：
+
+```sh
+node tests/test_bridge.cjs
+```
+
+原生应用验收由 `native install` 在本机已安装的支持版本上执行；GitHub Actions 不下载、分发或运行 Codex 本体。
+
 ```text
 gpt-start-anime/
 ├── animations/00-default.mp4
@@ -159,6 +176,9 @@ gpt-start-anime/
 ├── launcher.py
 ├── player.py
 ├── manage.py
+├── native.py
+├── asar.py
+├── native_assets/
 ├── setup.sh
 ├── tests/
 ├── .github/workflows/tests.yml

@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 APP_ID = "codex-startup-animation"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 
 def data_path():
@@ -113,12 +113,34 @@ def main(argv=None):
             play_intro(config, Path(__file__).with_name("player.py"))
         if args.preview:
             return 0
-        command = config["app_command"] + forwarded
+        original = config["app_command"]
+        try:
+            from native import resolve_command
+            target = resolve_command(original)
+        except (ImportError, OSError, ValueError, KeyError, TypeError) as exc:
+            logging.warning("原生集成不可用，使用原版：%s", exc)
+            target = original
+        command = target + forwarded
         logging.info("动画结束，启动应用")
         try:
-            subprocess.Popen(command, start_new_session=True, close_fds=True,
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            process = subprocess.Popen(command, start_new_session=True, close_fds=True,
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if target != original:
+                try:
+                    result = process.wait(timeout=2)
+                    if result:
+                        raise OSError(f"副本启动后立即退出：{result}")
+                except subprocess.TimeoutExpired:
+                    pass
         except OSError as exc:
+            if target != original:
+                logging.warning("副本无法执行，回退系统原版：%s", exc)
+                try:
+                    subprocess.Popen(original + forwarded, start_new_session=True, close_fds=True,
+                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return 0
+                except OSError as fallback_error:
+                    exc = fallback_error
             logging.error("无法启动应用：%s", exc)
             print(f"无法启动应用：{exc}", file=sys.stderr)
             return 1

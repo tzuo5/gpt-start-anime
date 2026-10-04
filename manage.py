@@ -194,8 +194,12 @@ def install(video=None, fullscreen=None, mute=None, timeout=None, *, video_dir=N
             subprocess.run(["desktop-file-validate", str(staging)], check=True, capture_output=True)
         finally:
             staging.unlink(missing_ok=True)
-    for name in ("launcher.py", "player.py", "manage.py"):
+    for name in ("launcher.py", "player.py", "manage.py", "native.py", "asar.py"):
         atomic_write(root / name, Path(__file__).with_name(name).read_bytes(), 0o755)
+    assets = Path(__file__).parent / "native_assets"
+    for asset in assets.iterdir():
+        if asset.is_file():
+            atomic_write(root / "native_assets" / asset.name, asset.read_bytes(), 0o644)
     atomic_write(config_path(), json.dumps({
         "schema_version": 2, "video_dir": str(folder), "enabled": enabled,
         "fullscreen": fullscreen, "mute": mute,
@@ -222,6 +226,8 @@ def uninstall():
     desktop = desktop.with_name(state.get("desktop_name", desktop.name))
     if desktop.is_symlink() or not desktop.is_file() or digest(desktop.read_bytes()) != state["installed_sha256"]:
         raise RuntimeError("桌面入口已被其他程序更改；未执行恢复，请保留 install-state.json 并检查入口")
+    import native
+    native_message = native.uninstall()
     if state["had_local_entry"]:
         atomic_write(desktop, base64.b64decode(state["source"]), state["original_mode"])
     else:
@@ -233,7 +239,7 @@ def uninstall():
     if shutil.which("update-desktop-database"):
         subprocess.run(["update-desktop-database", str(desktop.parent)], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return "已恢复原来的应用启动方式。视频、配置和设置工具已保留，可以重新启用。"
+    return "已恢复原来的应用启动方式。视频、配置和设置工具已保留，可以重新启用。\n" + native_message
 
 
 def status():
@@ -311,6 +317,10 @@ def gui():
     message = Gtk.Label(xalign=0)
     message.set_line_wrap(True)
     box.pack_start(message, True, True, 0)
+    import native
+    native_label = Gtk.Label(label="原生 Appearance：" + native.status()["reason"], xalign=0)
+    native_label.set_line_wrap(True)
+    box.pack_start(native_label, False, False, 0)
     if config_path().exists():
         config = read_config(config_path())
         folder_entry.set_text(config.get("video_dir", str(default_video_dir())))
@@ -324,6 +334,7 @@ def gui():
     def action(function):
         try:
             message.set_text(function())
+            native_label.set_text("原生 Appearance：" + native.status()["reason"])
         except Exception as exc:
             message.set_text(str(exc))
 
@@ -373,6 +384,7 @@ def gui():
         ("保存 / 安装", save),
         ("打开动画文件夹", show_folder),
         ("恢复原启动方式", uninstall),
+        ("关闭原生集成", native.disable),
     ]:
         button = Gtk.Button(label=label)
         button.connect("clicked", lambda _, cb=callback: action(cb))
@@ -401,9 +413,24 @@ def main():
         target.add_argument("--timeout", type=int)
     for name in ("gui", "status", "doctor", "uninstall", "preview", "open-folder"):
         commands.add_parser(name)
+    native_parser = commands.add_parser("native", help="原生 Appearance 应用副本的安装与恢复")
+    native_parser.add_argument("native_action", choices=("install", "status", "disable", "uninstall", "prepare-apparmor"))
+    native_parser.add_argument("--source", type=Path, default=Path('/usr/lib/chatgpt'))
     args = parser.parse_args()
     try:
-        if args.action == "install":
+        if args.action == "native":
+            import native
+            if args.native_action == "status":
+                print(json.dumps(native.status(), ensure_ascii=False, indent=2))
+            elif args.native_action == "install":
+                # Refresh the installed helper without resetting native state.
+                print(install())
+                print(native.install(args.source))
+            elif args.native_action == "prepare-apparmor":
+                print(native.prepare_apparmor())
+            else:
+                print(getattr(native, args.native_action)())
+        elif args.action == "install":
             print(install(args.video, args.fullscreen, args.mute, args.timeout,
                           video_dir=args.video_dir, enabled=args.enabled, desktop_file=args.desktop_file))
         elif args.action == "configure":

@@ -22,6 +22,8 @@ jobs:
             desktop-file-utils xvfb xauth
       - name: Unit and integration tests
         run: /usr/bin/python3 -m unittest discover -s tests -v
+      - name: IPC bridge security and lifecycle tests
+        run: node tests/test_bridge.cjs
       - name: Construct and display the appearance settings window
         run: |
           xvfb-run -a /usr/bin/python3 - <<'PY'

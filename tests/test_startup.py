@@ -118,6 +118,17 @@ class InstallTests(unittest.TestCase):
         manage.configure(enabled=True)
         self.assertIsNotNone(manage.status()["selected_video"])
 
+    def test_reinstall_and_configure_preserve_native_state_and_original_command(self):
+        import native
+        native.write_json(native.state_path(), {"enabled": True, "marker": "keep-native-state"})
+        original = native.state_path().read_bytes()
+        with patch.object(manage, "doctor"):
+            manage.install(self.video)
+            manage.install(fullscreen=False, mute=True)
+        manage.configure(enabled=False)
+        self.assertEqual(native.state_path().read_bytes(), original)
+        self.assertEqual(manage.status()["config"]["app_command"], ["/usr/bin/true"])
+
     def test_custom_desktop_and_settings_action_are_restored(self):
         custom = self.root / "codex.desktop"
         custom.write_text('[Desktop Entry]\nName=Codex\nType=Application\nExec=/usr/bin/true --some-flag %U\nActions=Original;\n\n[Desktop Action Original]\nName=Original\nExec=/usr/bin/true\n')
@@ -231,6 +242,35 @@ class StartupTests(unittest.TestCase):
         self.player(code=1)
         self.assert_success(self.start())
         self.assertEqual(self.wait_events(3)[-1]["event"], "app")
+
+    def native_target(self, command):
+        (self.root / 'native.py').write_text('def resolve_command(original):\n return ' + repr(command) + '\n')
+
+    def test_copy_receives_literal_arguments_after_intro(self):
+        self.player()
+        copy_app = self.root / 'copy app.py'
+        copy_app.write_text(self.app.read_text().replace("'event': 'app'", "'event': 'copy'"))
+        self.native_target([sys.executable, str(copy_app)])
+        args = ['codex://threads/example', 'a path with spaces', '$(touch nope)']
+        self.assert_success(self.start(args))
+        events = self.wait_events(3)
+        self.assertEqual([e['event'] for e in events], ['play', 'end', 'copy'])
+        self.assertEqual(events[-1]['args'], args)
+
+    def test_copy_immediate_failure_falls_back_to_original(self):
+        self.player()
+        broken = self.root / 'broken copy.py'
+        broken.write_text('raise SystemExit(42)\n')
+        self.native_target([sys.executable, str(broken)])
+        self.assert_success(self.start(['forwarded argument']))
+        events = self.wait_events(3)
+        self.assertEqual(events[-1], {'event': 'app', 'args': ['forwarded argument']})
+
+    def test_copy_missing_executable_falls_back_to_original(self):
+        self.player()
+        self.native_target([str(self.root / 'missing executable')])
+        self.assert_success(self.start(['codex://threads/fallback']))
+        self.assertEqual(self.wait_events(3)[-1]['args'], ['codex://threads/fallback'])
 
     def test_missing_video_still_launches_app(self):
         self.write_config(video=self.root / "missing.mp4")
