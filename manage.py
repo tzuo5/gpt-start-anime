@@ -173,7 +173,7 @@ def install(video=None, fullscreen=None, mute=None, timeout=None, *, video_dir=N
         destination = folder / video.name
         if video != destination:
             shutil.copy2(video, destination)
-    elif video_dir is None and folder_new:
+    elif video_dir is None and folder_new and "video_dir" not in existing_config:
         # Seed only a newly created default folder. Never refill an emptied one.
         bundled = bundled_video_dir()
         if bundled.is_dir():

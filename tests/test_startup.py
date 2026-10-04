@@ -95,6 +95,9 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(chosen.name, "00-default.mp4")
             chosen.unlink()
             manage.install()
+            # Deleting the directory also keeps animation disabled on upgrade.
+            Path(config["video_dir"]).rmdir()
+            manage.install()
         self.assertIsNone(manage.status()["selected_video"])
 
     def test_custom_empty_folder_never_seeded(self):
