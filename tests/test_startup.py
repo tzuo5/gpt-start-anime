@@ -129,6 +129,8 @@ class InstallTests(unittest.TestCase):
         self.assertIn("Actions=Original;StartupAnimationSettings;", installed.read_text())
         settings = installed.with_name(manage.SETTINGS_ID)
         self.assertTrue(settings.is_file())
+        self.system_desktop.unlink()
+        self.assertIn("已就绪", manage.doctor())
         manage.uninstall()
         self.assertFalse(installed.exists())
         self.assertFalse(settings.exists())

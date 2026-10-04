@@ -76,7 +76,12 @@ def desktop_entry(original, launcher, settings=None):
 
 
 def doctor(desktop_file=None):
-    if not Path(desktop_file or SYSTEM_DESKTOP).is_file():
+    target = Path(desktop_file or SYSTEM_DESKTOP)
+    state_file = data_path() / "install-state.json"
+    if desktop_file is None and state_file.is_file():
+        desktop_name = json.loads(state_file.read_text()).get("desktop_name", "chatgpt.desktop")
+        target = data_path().parent / "applications" / desktop_name
+    if not target.is_file():
         raise RuntimeError("未发现 chatgpt.desktop；可用 install --desktop-file 指定应用桌面文件")
     import gi
     gi.require_version("Gtk", "3.0")
