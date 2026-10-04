@@ -35,7 +35,7 @@ jobs:
           PY
       - name: Decode, render, and finish the bundled MP4
         run: |
-          xvfb-run -a /usr/bin/python3 player.py --video animations/00-default.mp4 --mute > playback.json
+          xvfb-run -a /usr/bin/python3 player.py --video animations/00-default.mp4 --mute --report playback.json
           /usr/bin/python3 - <<'PY'
           import json
           from pathlib import Path

@@ -7,7 +7,7 @@ import sys
 import threading
 
 
-def play(video, fullscreen=False, mute=False):
+def play(video, fullscreen=False, mute=False, report=None):
     import gi
     gi.require_version("Gtk", "3.0")
     gi.require_version("Gdk", "3.0")
@@ -146,7 +146,10 @@ def play(video, fullscreen=False, mute=False):
         playbin.set_state(Gst.State.NULL)
         bus.remove_signal_watch()
         window.destroy()
-    print(json.dumps(result))
+    summary = json.dumps(result)
+    if report is not None:
+        report.write_text(summary + "\n", encoding="utf-8")
+    print(summary)
     return 0 if result["reason"] in ("eos", "skip") and (result["frames"] or result["reason"] == "skip") else 1
 
 
@@ -155,9 +158,10 @@ def main():
     parser.add_argument("--video", required=True, type=Path)
     parser.add_argument("--fullscreen", action="store_true")
     parser.add_argument("--mute", action="store_true")
+    parser.add_argument("--report", type=Path, help="单独保存播放结果，避免媒体库标准输出干扰")
     args = parser.parse_args()
     try:
-        return play(args.video, args.fullscreen, args.mute)
+        return play(args.video, args.fullscreen, args.mute, args.report)
     except Exception as exc:
         print(f"动画播放失败：{exc}", file=sys.stderr)
         return 1
